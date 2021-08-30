@@ -1,6 +1,6 @@
 # rs-hmc
 
-The goal of `rs-hmc` is to provide Rust implementations of the [Hamiltonian Monte Carl (HMC)](https://en.wikipedia.org/wiki/Hamiltonian_Monte_Carlo) and its popular extension, the [No-U-Turn Sampler (NUTS)](http://www.stat.columbia.edu/~gelman/research/published/nuts.pdf). For the time being, these are mainly for educative purposes. Efficient and well tested implementations of these algorithms already exist in other places, perhaps most notably in the [Stan project](https://mc-stan.org/.
+The goal of `rs-hmc` is to provide Rust implementations of the [Hamiltonian Monte Carl (HMC)](https://en.wikipedia.org/wiki/Hamiltonian_Monte_Carlo) and its popular extension, the [No-U-Turn Sampler (NUTS)](http://www.stat.columbia.edu/~gelman/research/published/nuts.pdf). For the time being, these are mainly for educative purposes. Efficient and well tested implementations of these algorithms already exist in other places, perhaps most notably in the [Stan project](https://mc-stan.org/).
 
 ## License
 
