@@ -29,13 +29,13 @@
 /// }
 /// ```
 pub trait Target<T> {
-    // Compute the logarithm of the target density function
+    /// Compute the logarithm of the target density function
     fn log_density(&self, position: T) -> f64;
-    // Compute the gradient logarithm of the target density function at a given position
+    /// Compute the gradient logarithm of the target density function at a given position
     fn log_density_gradient(&self, position: T) -> T;
 }
 
-struct UnivariateStandardNormal {
+pub struct UnivariateStandardNormal {
     log_sqrt_2_pi: f64,
 }
 
