@@ -10,7 +10,7 @@ struct HMC<D, M, T>
 where
     D: Target<T>,
     M: Momentum<T>,
-    T: Clone + Mul<f64, Output = T> + AddAssign,
+    T: Clone + Copy + Mul<f64, Output = T> + AddAssign,
 {
     target_density: D,
     momentum_density: M,
@@ -22,7 +22,7 @@ impl<D, M, T> HMC<D, M, T>
 where
     D: Target<T>,
     M: Momentum<T>,
-    T: Clone + Mul<f64, Output = T> + AddAssign,
+    T: Clone + Copy + Mul<f64, Output = T> + AddAssign,
 {
     fn new(target_density: D, momentum_density: M) -> Self {
         Self {
@@ -34,7 +34,7 @@ where
     }
 
     fn sample(
-        &self,
+        &mut self,
         position0: T,
         step_size: f64,
         integration_length: usize,
@@ -46,13 +46,13 @@ where
             let mut position = position0.clone();
             let momentum_m = self.momentum_density.sample();
             let mut momentum = momentum_m.clone();
-            for i in 0..integration_length {
+            for _ in 0..integration_length {
                 self.leapfrog(&mut position, &mut momentum, step_size);
             }
             let acc_prob =
                 self.acceptance_probability(&position, &momentum, &position_m, &momentum_m);
             if self.is_accepted(acc_prob) {
-                samples.push(position);
+                samples.push(position.clone());
                 position_m = position.clone();
             }
         }
@@ -60,12 +60,12 @@ where
     }
 
     fn leapfrog(&self, position: &mut T, momentum: &mut T, step_size: f64) {
-        *momentum += self.target_density.log_density_gradient(&position) * (step_size / 2.);
+        *momentum += self.target_density.log_density_gradient(position) * (step_size / 2.);
         *position += *momentum * step_size;
-        *momentum += self.target_density.log_density_gradient(&position) * (step_size / 2.);
+        *momentum += self.target_density.log_density_gradient(position) * (step_size / 2.);
     }
 
-    fn is_accepted(&self, acceptance_probability: f64) -> bool {
+    fn is_accepted(&mut self, acceptance_probability: f64) -> bool {
         self.rng.gen_range(0.0..1.0) < acceptance_probability
     }
 
@@ -92,15 +92,24 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::momentum::{Momentum, MultivariaStandardNormalMomentum};
-    use crate::target::{MultivariateStandardNormal, Target};
+    use crate::momentum::{
+        Momentum, MultivariaStandardNormalMomentum, UnivariateStandardNormalMomentum,
+    };
+    use crate::target::{MultivariateStandardNormal, Target, UnivariateStandardNormal};
+    use approx::assert_abs_diff_eq;
     use ndarray::{arr1, Array1};
 
     #[test]
-    fn test_new_hmc() {
-        let target = MultivariateStandardNormal::new();
-        let momentum = MultivariaStandardNormalMomentum::new(2);
-        let hmc = HMC::new(target, momentum);
-        assert_eq!(1, 2);
+    fn test_hmc_univariate_normal() {
+        let mut hmc = HMC::new(
+            UnivariateStandardNormal::new(),
+            UnivariateStandardNormalMomentum::new(),
+        );
+        let samples = hmc.sample(1.2, 0.01, 100, 1000);
+        let mean = samples.iter().sum::<f64>() / samples.len() as f64;
+        let variance = samples.iter().map(|v| (v - mean) * (v - mean)).sum::<f64>();
+        println!("{:?}", samples);
+        assert_abs_diff_eq!(mean, 0.0);
+        assert_abs_diff_eq!(variance, 1.0);
     }
 }
