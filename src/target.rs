@@ -1,3 +1,6 @@
+use approx::assert_abs_diff_eq;
+use ndarray::{arr1, Array1};
+
 /// Distributions that can be targeted with the samplers in this crate
 ///
 /// Any distribution targeted by the hmc or nuts sampler needs to implement
@@ -57,14 +60,41 @@ impl Target<f64> for UnivariateStandardNormal {
     }
 }
 
+pub struct MultivariateStandardNormal {}
+
+impl MultivariateStandardNormal {
+    pub fn new() -> Self {
+        MultivariateStandardNormal {}
+    }
+}
+
+impl Target<Array1<f64>> for MultivariateStandardNormal {
+    fn log_density(&self, position: Array1<f64>) -> f64 {
+        -0.5 * position.dot(&position)
+    }
+
+    fn log_density_gradient(&self, position: Array1<f64>) -> Array1<f64> {
+        -position
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
     fn test_uv_standard_normal() {
         let d = UnivariateStandardNormal::new();
         assert_eq!(d.log_density_gradient(0.0), 0.0);
         assert!(d.log_density(0.0) > d.log_density(1.0));
         assert!(d.log_density(0.0) > d.log_density(-1.0));
+    }
+
+    #[test]
+    fn test_mv_standard_normal() {
+        let d = MultivariateStandardNormal::new();
+        assert_abs_diff_eq!(d.log_density_gradient(arr1(&[0., 0.])), arr1(&[0., 0.]));
+        assert!(d.log_density(arr1(&[0., 0.])) > d.log_density(arr1(&[1., 0.])));
+        assert!(d.log_density(arr1(&[0., 0.])) > d.log_density(arr1(&[-1., 0.])));
     }
 }
