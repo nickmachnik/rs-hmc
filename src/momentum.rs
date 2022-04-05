@@ -5,7 +5,7 @@ use rand_distr::StandardNormal;
 /// Sampling of momenta and computation of log densities.
 pub trait Momentum<T> {
     /// Compute the logarithm of the momentum density function
-    fn log_density(&self, position: T) -> f64;
+    fn log_density(&self, position: &T) -> f64;
     fn sample(&self) -> T;
 }
 
@@ -28,7 +28,7 @@ impl Momentum<f64> for UnivariateStandardNormalMomentum {
         self.rng.sample(StandardNormal)
     }
 
-    fn log_density(&self, position: f64) -> f64 {
+    fn log_density(&self, position: &f64) -> f64 {
         (-0.5 * position * position) - self.log_sqrt_2_pi
     }
 }
@@ -56,7 +56,7 @@ impl Momentum<Array1<f64>> for MultivariaStandardNormalMomentum {
         res
     }
 
-    fn log_density(&self, position: Array1<f64>) -> f64 {
-        -0.5 * position.dot(&position)
+    fn log_density(&self, position: &Array1<f64>) -> f64 {
+        -0.5 * position.dot(position)
     }
 }
