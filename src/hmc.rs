@@ -1,37 +1,106 @@
+use crate::momentum::Momentum;
 use crate::target::Target;
+use rand::rngs::ThreadRng;
+use rand::{thread_rng, Rng};
+use std::ops::{AddAssign, Mul};
 
 use std::marker::PhantomData;
 
-struct HMC<D, T>
+struct HMC<D, M, T>
 where
     D: Target<T>,
+    M: Momentum<T>,
+    T: Clone + Mul<f64, Output = T> + AddAssign,
 {
-    target: D,
+    target_density: D,
+    momentum_density: M,
     data_type: PhantomData<T>,
+    rng: ThreadRng,
 }
 
-impl<D, T> HMC<D, T>
+impl<D, M, T> HMC<D, M, T>
 where
     D: Target<T>,
+    M: Momentum<T>,
+    T: Clone + Mul<f64, Output = T> + AddAssign,
 {
-    fn new(target: D) -> Self {
+    fn new(target_density: D, momentum_density: M) -> Self {
         Self {
-            target,
+            target_density,
+            momentum_density,
             data_type: PhantomData,
+            rng: thread_rng(),
         }
+    }
+
+    fn sample(
+        &self,
+        position0: T,
+        step_size: f64,
+        integration_length: usize,
+        n_samples: usize,
+    ) -> Vec<T> {
+        let mut samples: Vec<T> = Vec::with_capacity(n_samples);
+        let mut position_m = position0.clone();
+        while samples.len() < n_samples {
+            let mut position = position0.clone();
+            let momentum_m = self.momentum_density.sample();
+            let mut momentum = momentum_m.clone();
+            for i in 0..integration_length {
+                self.leapfrog(&mut position, &mut momentum, step_size);
+            }
+            let acc_prob =
+                self.acceptance_probability(&position, &momentum, &position_m, &momentum_m);
+            if self.is_accepted(acc_prob) {
+                samples.push(position);
+                position_m = position.clone();
+            }
+        }
+        samples
+    }
+
+    fn leapfrog(&self, position: &mut T, momentum: &mut T, step_size: f64) {
+        *momentum += self.target_density.log_density_gradient(&position) * (step_size / 2.);
+        *position += *momentum * step_size;
+        *momentum += self.target_density.log_density_gradient(&position) * (step_size / 2.);
+    }
+
+    fn is_accepted(&self, acceptance_probability: f64) -> bool {
+        self.rng.gen_range(0.0..1.0) < acceptance_probability
+    }
+
+    fn acceptance_probability(
+        &self,
+        new_position: &T,
+        new_momentum: &T,
+        initial_position: &T,
+        initial_momentum: &T,
+    ) -> f64 {
+        let log_acc_probability = self.log_hamiltonian_density(new_position, new_momentum)
+            - self.log_hamiltonian_density(initial_position, initial_momentum);
+        if log_acc_probability >= 0. {
+            return 1.;
+        }
+        log_acc_probability.exp()
+    }
+
+    fn log_hamiltonian_density(&self, position: &T, momentum: &T) -> f64 {
+        self.target_density.log_density(position) + self.momentum_density.log_density(momentum)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::target::{Target, UnivariateStandardNormal};
+    use crate::momentum::{Momentum, MultivariaStandardNormalMomentum};
+    use crate::target::{MultivariateStandardNormal, Target};
     use ndarray::{arr1, Array1};
 
     #[test]
     fn test_new_hmc() {
-        let target = UnivariateStandardNormal::new();
-        let hmc = HMC::new(target);
+        let target = MultivariateStandardNormal::new();
+        let momentum = MultivariaStandardNormalMomentum::new(2);
+        let hmc = HMC::new(target, momentum);
         assert_eq!(1, 2);
     }
 }
