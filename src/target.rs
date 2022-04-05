@@ -40,7 +40,7 @@ pub struct UnivariateStandardNormal {
 }
 
 impl UnivariateStandardNormal {
-    fn new() -> Self {
+    pub fn new() -> Self {
         UnivariateStandardNormal {
             log_sqrt_2_pi: (2.0 * std::f64::consts::PI).sqrt().ln(),
         }
