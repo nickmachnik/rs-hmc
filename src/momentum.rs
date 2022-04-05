@@ -1,4 +1,4 @@
-use ndarray::{arr1, Array1};
+use ndarray::Array1;
 use rand::prelude::*;
 use rand_distr::StandardNormal;
 
@@ -6,7 +6,7 @@ use rand_distr::StandardNormal;
 pub trait Momentum<T> {
     /// Compute the logarithm of the momentum density function
     fn log_density(&self, position: &T) -> f64;
-    fn sample(&self) -> T;
+    fn sample(&mut self) -> T;
 }
 
 pub struct UnivariateStandardNormalMomentum {
@@ -24,7 +24,7 @@ impl UnivariateStandardNormalMomentum {
 }
 
 impl Momentum<f64> for UnivariateStandardNormalMomentum {
-    fn sample(&self) -> f64 {
+    fn sample(&mut self) -> f64 {
         self.rng.sample(StandardNormal)
     }
 
@@ -48,8 +48,8 @@ impl MultivariaStandardNormalMomentum {
 }
 
 impl Momentum<Array1<f64>> for MultivariaStandardNormalMomentum {
-    fn sample(&self) -> Array1<f64> {
-        let res = arr1(vec![0.; self.ndim]);
+    fn sample(&mut self) -> Array1<f64> {
+        let mut res = Array1::from(vec![0.; self.ndim]);
         for ix in 0..self.ndim {
             res[ix] = self.rng.sample(StandardNormal);
         }

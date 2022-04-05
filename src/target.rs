@@ -1,4 +1,3 @@
-use approx::assert_abs_diff_eq;
 use ndarray::{arr1, Array1};
 
 /// Distributions that can be targeted with the samplers in this crate
@@ -81,6 +80,7 @@ impl Target<Array1<f64>> for MultivariateStandardNormal {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use approx::assert_abs_diff_eq;
 
     #[test]
     fn test_uv_standard_normal() {
