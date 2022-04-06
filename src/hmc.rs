@@ -2,6 +2,7 @@ use crate::momentum::Momentum;
 use crate::target::Target;
 use rand::rngs::ThreadRng;
 use rand::{thread_rng, Rng};
+use std::fmt::Debug;
 use std::ops::{AddAssign, Mul};
 
 use std::marker::PhantomData;
@@ -10,7 +11,7 @@ struct HMC<D, M, T>
 where
     D: Target<T>,
     M: Momentum<T>,
-    T: Clone + Copy + Mul<f64, Output = T> + AddAssign,
+    T: Clone + Copy + Mul<f64, Output = T> + AddAssign + Debug,
 {
     target_density: D,
     momentum_density: M,
@@ -22,7 +23,7 @@ impl<D, M, T> HMC<D, M, T>
 where
     D: Target<T>,
     M: Momentum<T>,
-    T: Clone + Copy + Mul<f64, Output = T> + AddAssign,
+    T: Clone + Copy + Mul<f64, Output = T> + AddAssign + Debug,
 {
     fn new(target_density: D, momentum_density: M) -> Self {
         Self {
@@ -63,6 +64,7 @@ where
         *momentum += self.target_density.log_density_gradient(position) * (step_size / 2.);
         *position += *momentum * step_size;
         *momentum += self.target_density.log_density_gradient(position) * (step_size / 2.);
+        dbg!("{:?},{:?}", position, momentum);
     }
 
     fn is_accepted(&mut self, acceptance_probability: f64) -> bool {
@@ -92,12 +94,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::momentum::{
-        Momentum, MultivariaStandardNormalMomentum, UnivariateStandardNormalMomentum,
-    };
-    use crate::target::{MultivariateStandardNormal, Target, UnivariateStandardNormal};
+    use crate::momentum::UnivariateStandardNormalMomentum;
+    use crate::target::UnivariateStandardNormal;
     use approx::assert_abs_diff_eq;
-    use ndarray::{arr1, Array1};
 
     #[test]
     fn test_hmc_univariate_normal() {
@@ -105,10 +104,9 @@ mod tests {
             UnivariateStandardNormal::new(),
             UnivariateStandardNormalMomentum::new(),
         );
-        let samples = hmc.sample(1.2, 0.01, 100, 1000);
+        let samples = hmc.sample(0.1, 0.01, 100, 1000);
         let mean = samples.iter().sum::<f64>() / samples.len() as f64;
         let variance = samples.iter().map(|v| (v - mean) * (v - mean)).sum::<f64>();
-        println!("{:?}", samples);
         assert_abs_diff_eq!(mean, 0.0);
         assert_abs_diff_eq!(variance, 1.0);
     }
