@@ -64,7 +64,7 @@ where
         *momentum += self.target_density.log_density_gradient(position) * (step_size / 2.);
         *position += *momentum * step_size;
         *momentum += self.target_density.log_density_gradient(position) * (step_size / 2.);
-        dbg!("{:?},{:?}", position, momentum);
+        dbg!(position, momentum);
     }
 
     fn is_accepted(&mut self, acceptance_probability: f64) -> bool {
