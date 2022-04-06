@@ -3,7 +3,7 @@
 extern crate blas_src;
 extern crate openblas_src;
 
-mod hmc;
-mod momentum;
-mod nuts;
-mod target;
+pub mod hmc;
+pub mod momentum;
+pub mod nuts;
+pub mod target;
