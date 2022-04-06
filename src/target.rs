@@ -81,6 +81,7 @@ impl Target<Array1<f64>> for MultivariateStandardNormal {
 mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
+    use ndarray::arr1;
 
     #[test]
     fn test_uv_standard_normal() {
