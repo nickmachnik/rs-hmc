@@ -8,5 +8,7 @@ fn main() {
         UnivariateStandardNormal::new(),
         UnivariateStandardNormalMomentum::new(),
     );
-    let _samples = hmc.sample(0.1, 0.01, 100, 1000);
+    hmc.sample(2., 0.05, 200, 1000)
+        .iter()
+        .for_each(|v| println!("{v}"));
 }
