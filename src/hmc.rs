@@ -7,7 +7,7 @@ use std::ops::{AddAssign, Mul};
 
 use std::marker::PhantomData;
 
-struct HMC<D, M, T>
+pub struct HMC<D, M, T>
 where
     D: Target<T>,
     M: Momentum<T>,
@@ -25,7 +25,7 @@ where
     M: Momentum<T>,
     T: Clone + Copy + Mul<f64, Output = T> + AddAssign + Debug,
 {
-    fn new(target_density: D, momentum_density: M) -> Self {
+    pub fn new(target_density: D, momentum_density: M) -> Self {
         Self {
             target_density,
             momentum_density,
@@ -34,7 +34,7 @@ where
         }
     }
 
-    fn sample(
+    pub fn sample(
         &mut self,
         position0: T,
         step_size: f64,
