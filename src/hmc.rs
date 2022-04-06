@@ -42,19 +42,19 @@ where
         n_samples: usize,
     ) -> Vec<T> {
         let mut samples: Vec<T> = Vec::with_capacity(n_samples);
-        let mut position_m = position0.clone();
+        let mut position_m = position0;
         while samples.len() < n_samples {
-            let mut position = position0.clone();
+            let mut position = position0;
             let momentum_m = self.momentum_density.sample();
-            let mut momentum = momentum_m.clone();
+            let mut momentum = momentum_m;
             for _ in 0..integration_length {
                 self.leapfrog(&mut position, &mut momentum, step_size);
             }
             let acc_prob =
                 self.acceptance_probability(&position, &momentum, &position_m, &momentum_m);
             if self.is_accepted(acc_prob) {
-                samples.push(position.clone());
-                position_m = position.clone();
+                samples.push(position);
+                position_m = position;
             }
         }
         samples
