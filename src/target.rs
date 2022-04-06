@@ -1,4 +1,4 @@
-use ndarray::{arr1, Array1};
+use ndarray::Array1;
 
 /// Distributions that can be targeted with the samplers in this crate
 ///
