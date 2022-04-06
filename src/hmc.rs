@@ -44,7 +44,7 @@ where
         let mut samples: Vec<T> = Vec::with_capacity(n_samples);
         let mut position_m = position0;
         while samples.len() < n_samples {
-            let mut position = position0;
+            let mut position = position_m;
             let momentum_m = self.momentum_density.sample();
             let mut momentum = momentum_m;
             for _ in 0..integration_length {
