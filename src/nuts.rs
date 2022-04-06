@@ -7,7 +7,7 @@ use std::ops::{AddAssign, Mul};
 
 use std::marker::PhantomData;
 
-pub struct HMC<D, M, T>
+pub struct NUTS<D, M, T>
 where
     D: Target<T>,
     M: Momentum<T>,
@@ -19,7 +19,7 @@ where
     rng: ThreadRng,
 }
 
-impl<D, M, T> HMC<D, M, T>
+impl<D, M, T> NUTS<D, M, T>
 where
     D: Target<T>,
     M: Momentum<T>,
@@ -34,30 +34,80 @@ where
         }
     }
 
-    pub fn sample(
-        &mut self,
-        position0: T,
-        step_size: f64,
-        integration_length: usize,
-        n_samples: usize,
-    ) -> Vec<T> {
+    pub fn sample(&mut self, position0: T, n_samples: usize, n_adapt: usize) -> Vec<T> {
+        let mut step_size = self.find_reasonable_step_size(position0);
+        let mut av_step_size = 1.;
+        let mut av_H = 0;
+        let av_acc_prob = 0.65;
+        let shrinkage_target = 10. * step_size;
+        let gamma = 0.05;
+        let t0 = 10;
+        let kappa = 0.75;
         let mut samples: Vec<T> = Vec::with_capacity(n_samples);
-        let mut position_m = position0;
+        let mut init_position = position0;
+        let mut forward_position: T;
+        let mut backward_position: T;
+        let mut forward_momentum: T;
+        let mut backward_momentum: T;
         while samples.len() < n_samples {
-            let mut position = position0;
-            let momentum_m = self.momentum_density.sample();
-            let mut momentum = momentum_m;
-            for _ in 0..integration_length {
-                self.leapfrog(&mut position, &mut momentum, step_size);
-            }
-            let acc_prob =
-                self.acceptance_probability(&position, &momentum, &position_m, &momentum_m);
-            if self.is_accepted(acc_prob) {
-                samples.push(position);
-                position_m = position;
+            let mut init_momentum = self.momentum_density.sample();
+            let u = self.rng.gen_range(
+                0.0..self
+                    .log_hamiltonian_density(&init_position, &init_momentum)
+                    .exp(),
+            );
+            forward_position = init_position;
+            backward_position = init_position;
+            forward_momentum = init_momentum;
+            backward_momentum = init_momentum;
+            let mut j = 0;
+            let mut n = 1.;
+            let mut n_prime: f64;
+            let mut s = true;
+            let mut s_prime: bool;
+            let mut alpha = 0;
+            let mut n_alpha = 0;
+            while s {
+                if self.rng.gen_range(0.0..1.0) < 0.5_f64 {
+                    (n_prime, s_prime, alpha, n_alpha) = self.build_tree(
+                        &mut backward_position,
+                        &mut backward_momentum,
+                        u,
+                        -1,
+                        j,
+                        step_size,
+                        &init_position,
+                        &init_momentum,
+                    );
+                } else {
+                    (n_prime, s_prime, alpha, n_alpha) = self.build_tree(
+                        &mut forward_position,
+                        &mut forward_momentum,
+                        u,
+                        1,
+                        j,
+                        step_size,
+                        &init_position,
+                        &init_momentum,
+                    );
+                }
             }
         }
         samples
+    }
+
+    fn build_tree(
+        &self,
+        position: &mut T,
+        momentum: &mut T,
+        u: f64,
+        v: isize,
+        j: usize,
+        step_size: f64,
+        init_position: &T,
+        init_momentum: &T,
+    ) -> (f64, bool, i32, i32) {
+        (0., true, 0, 0)
     }
 
     fn find_reasonable_step_size(&mut self, mut position: T) -> f64 {
@@ -121,12 +171,12 @@ where
 //     use approx::assert_abs_diff_eq;
 
 //     #[test]
-//     fn test_hmc_univariate_normal() {
-//         let mut hmc = HMC::new(
+//     fn test_NUTS_univariate_normal() {
+//         let mut NUTS = NUTS::new(
 //             UnivariateStandardNormal::new(),
 //             UnivariateStandardNormalMomentum::new(),
 //         );
-//         let samples = hmc.sample(0.1, 0.01, 100, 1000);
+//         let samples = NUTS.sample(0.1, 0.01, 100, 1000);
 //         let mean = samples.iter().sum::<f64>() / samples.len() as f64;
 //         let variance = samples.iter().map(|v| (v - mean) * (v - mean)).sum::<f64>();
 //         assert_abs_diff_eq!(mean, 0.0);
