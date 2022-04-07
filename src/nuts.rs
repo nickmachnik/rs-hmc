@@ -1,9 +1,10 @@
+use crate::dot::Dot;
 use crate::momentum::Momentum;
 use crate::target::Target;
 use rand::rngs::ThreadRng;
 use rand::{thread_rng, Rng};
 use std::fmt::Debug;
-use std::ops::{AddAssign, Mul};
+use std::ops::{AddAssign, Mul, Sub};
 
 use std::marker::PhantomData;
 
@@ -11,7 +12,7 @@ pub struct NUTS<D, M, T>
 where
     D: Target<T>,
     M: Momentum<T>,
-    T: Clone + Copy + Mul<f64, Output = T> + AddAssign + Debug,
+    T: Clone + Copy + Mul<f64, Output = T> + AddAssign + Sub<T, Output = T> + Debug + Dot<T>,
 {
     target_density: D,
     momentum_density: M,
@@ -23,7 +24,7 @@ impl<D, M, T> NUTS<D, M, T>
 where
     D: Target<T>,
     M: Momentum<T>,
-    T: Clone + Copy + Mul<f64, Output = T> + AddAssign + Debug,
+    T: Clone + Copy + Mul<f64, Output = T> + AddAssign + Sub<T, Output = T> + Debug + Dot<T>,
 {
     pub fn new(target_density: D, momentum_density: M) -> Self {
         Self {
@@ -35,22 +36,26 @@ where
     }
 
     pub fn sample(&mut self, position0: T, n_samples: usize, n_adapt: usize) -> Vec<T> {
+        let n_total = n_samples + n_adapt;
         let mut step_size = self.find_reasonable_step_size(position0);
-        let mut av_step_size = 1.;
-        let mut av_H = 0;
+        let mut log_av_step_size = 0.;
+        let mut av_H = 0.;
         let av_acc_prob = 0.65;
         let shrinkage_target = 10. * step_size;
         let gamma = 0.05;
         let t0 = 10;
         let kappa = 0.75;
-        let mut samples: Vec<T> = Vec::with_capacity(n_samples);
+        let mut samples: Vec<T> = Vec::with_capacity(n_total);
         let mut init_position = position0;
+        let mut init_momentum: T;
         let mut forward_position: T;
         let mut backward_position: T;
         let mut forward_momentum: T;
         let mut backward_momentum: T;
-        while samples.len() < n_samples {
-            let mut init_momentum = self.momentum_density.sample();
+        let mut curr_sample_ix = 0;
+        while samples.len() < n_total {
+            samples.push(init_position);
+            init_momentum = self.momentum_density.sample();
             let u = self.rng.gen_range(
                 0.0..self
                     .log_hamiltonian_density(&init_position, &init_momentum)
@@ -65,15 +70,20 @@ where
             let mut n_prime: f64;
             let mut s = true;
             let mut s_prime: bool;
-            let mut alpha = 0;
-            let mut n_alpha = 0;
+            let mut alpha = 0.;
+            let mut n_alpha = 0.;
             while s {
-                if self.rng.gen_range(0.0..1.0) < 0.5_f64 {
+                let v = if self.rng.gen_range(0.0..1.0) < 0.5_f64 {
+                    -1
+                } else {
+                    1
+                };
+                if v == -1 {
                     (n_prime, s_prime, alpha, n_alpha) = self.build_tree(
                         &mut backward_position,
                         &mut backward_momentum,
                         u,
-                        -1,
+                        v,
                         j,
                         step_size,
                         &init_position,
@@ -84,13 +94,45 @@ where
                         &mut forward_position,
                         &mut forward_momentum,
                         u,
-                        1,
+                        v,
                         j,
                         step_size,
                         &init_position,
                         &init_momentum,
                     );
                 }
+                if s_prime {
+                    let r = n_prime / n;
+                    let acc_prob = if r > 1. { 1. } else { r };
+                    if self.rng.gen_range(0.0..1.0) <= acc_prob {
+                        if v == -1 {
+                            samples[curr_sample_ix] = backward_position;
+                        } else {
+                            samples[curr_sample_ix] = forward_position;
+                        }
+                    }
+                }
+                n += n_prime;
+                s = s_prime
+                    && ((forward_momentum - backward_momentum).dotp(&backward_momentum) >= 0.0)
+                    && ((forward_momentum - backward_momentum).dotp(&forward_momentum) >= 0.0);
+                j += 1;
+            }
+            curr_sample_ix += 1;
+            init_position = samples[curr_sample_ix];
+            // dual averaging
+            if curr_sample_ix < n_adapt {
+                av_H = (1. - (1. / (curr_sample_ix + t0) as f64)) * av_H
+                    + (1. / (curr_sample_ix + t0) as f64) * (av_acc_prob - alpha / n_alpha);
+                let log_step_size =
+                    shrinkage_target - ((curr_sample_ix as f64).sqrt() / gamma) * av_H;
+                let ix_pow_neg_kappa = (curr_sample_ix as f64).powf(-kappa);
+                log_av_step_size =
+                    ix_pow_neg_kappa * log_step_size + (1 - ix_pow_neg_kappa) * log_av_step_size;
+                step_size = log_av_step_size.exp();
+            } else {
+                step_size = log_av_step_size.exp();
+            }
             }
         }
         samples
@@ -106,8 +148,9 @@ where
         step_size: f64,
         init_position: &T,
         init_momentum: &T,
-    ) -> (f64, bool, i32, i32) {
-        (0., true, 0, 0)
+    ) -> (f64, bool, f64, f64) {
+        
+        (0., true, 0., 0.)
     }
 
     fn find_reasonable_step_size(&mut self, mut position: T) -> f64 {
