@@ -12,15 +12,11 @@ pub trait Momentum<T> {
 #[derive(Clone)]
 pub struct UnivariateStandardNormalMomentum {
     rng: rand::rngs::ThreadRng,
-    log_sqrt_2_pi: f64,
 }
 
 impl UnivariateStandardNormalMomentum {
     pub fn new() -> Self {
-        Self {
-            rng: thread_rng(),
-            log_sqrt_2_pi: (2.0 * std::f64::consts::PI).sqrt().ln(),
-        }
+        Self { rng: thread_rng() }
     }
 }
 
@@ -30,7 +26,7 @@ impl Momentum<f64> for UnivariateStandardNormalMomentum {
     }
 
     fn log_density(&self, position: &f64) -> f64 {
-        (-0.5 * position * position) - self.log_sqrt_2_pi
+        -0.5 * position * position
     }
 }
 
