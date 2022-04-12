@@ -64,7 +64,7 @@ where
         *momentum += self.target_density.log_density_gradient(position) * (step_size / 2.);
         *position += *momentum * step_size;
         *momentum += self.target_density.log_density_gradient(position) * (step_size / 2.);
-        dbg!(position, momentum);
+        // dbg!(position, momentum);
     }
 
     fn is_accepted(&mut self, acceptance_probability: f64) -> bool {
@@ -78,15 +78,16 @@ where
         initial_position: &T,
         initial_momentum: &T,
     ) -> f64 {
-        let log_acc_probability = self.log_hamiltonian_density(new_position, new_momentum)
-            - self.log_hamiltonian_density(initial_position, initial_momentum);
+        let log_acc_probability = self.neg_hamiltonian(new_position, new_momentum)
+            - self.neg_hamiltonian(initial_position, initial_momentum);
         if log_acc_probability >= 0. {
             return 1.;
         }
         log_acc_probability.exp()
     }
 
-    fn log_hamiltonian_density(&self, position: &T, momentum: &T) -> f64 {
+    // this is -H = (-U) + (-K)
+    fn neg_hamiltonian(&self, position: &T, momentum: &T) -> f64 {
         self.target_density.log_density(position) + self.momentum_density.log_density(momentum)
     }
 }
@@ -96,7 +97,6 @@ mod tests {
     use super::*;
     use crate::momentum::UnivariateStandardNormalMomentum;
     use crate::target::UnivariateStandardNormal;
-    use approx::assert_abs_diff_eq;
 
     #[test]
     fn test_hmc_univariate_normal() {
@@ -104,10 +104,14 @@ mod tests {
             UnivariateStandardNormal::new(),
             UnivariateStandardNormalMomentum::new(),
         );
-        let samples = hmc.sample(0.1, 0.01, 100, 1000);
+        let n_samples = 10000;
+        let samples = hmc.sample(1.2, 0.1, 100, n_samples);
         let mean = samples.iter().sum::<f64>() / samples.len() as f64;
-        let variance = samples.iter().map(|v| (v - mean) * (v - mean)).sum::<f64>();
-        assert_abs_diff_eq!(mean, 0.0);
-        assert_abs_diff_eq!(variance, 1.0);
+        let variance =
+            samples.iter().map(|v| (v - mean) * (v - mean)).sum::<f64>() / n_samples as f64;
+        println!("{:?}", mean);
+        println!("{:?}", variance - 1.0);
+        assert!(mean.abs() < 0.01);
+        assert!((variance - 1.0) < 0.1);
     }
 }
