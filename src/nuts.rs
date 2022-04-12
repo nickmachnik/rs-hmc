@@ -8,7 +8,7 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::{AddAssign, Mul, Sub};
 
-const DELTA_MAX: f64 = 1000.;
+pub const DELTA_MAX: f64 = 1000.;
 const KAPPA: f64 = 0.75;
 const GAMMA: f64 = 0.05;
 const T0: f64 = 10.;
@@ -27,10 +27,8 @@ where
         + Dot<T>
         + Default,
 {
-    target_density: D,
-    momentum_density: M,
     data_type: PhantomData<T>,
-    most_recent_subtree: Tree<T>,
+    tree: Tree<D, M, T>,
     rng: ThreadRng,
 }
 
@@ -49,10 +47,8 @@ where
 {
     pub fn new(target_density: D, momentum_density: M, max_subtree_height: usize) -> Self {
         Self {
-            target_density,
-            momentum_density,
             data_type: PhantomData,
-            most_recent_subtree: Tree::new(max_subtree_height),
+            tree: Tree::new(target_density, momentum_density, max_subtree_height),
             rng: thread_rng(),
         }
     }
@@ -73,21 +69,17 @@ where
         let mut curr_sample_ix = 0;
         while samples.len() < n_total {
             samples.push(init_position);
-            init_momentum = self.momentum_density.sample();
-            let u = self
-                .rng
-                .gen_range(0.0..self.neg_hamiltonian(&init_position, &init_momentum).exp());
+            init_momentum = self.random_momentum();
+            self.tree.set_random_slice(&init_position, &init_momentum);
+            self.tree
+                .set_reference_state(&init_position, &init_momentum);
             forward_position = init_position;
             backward_position = init_position;
             forward_momentum = init_momentum;
             backward_momentum = init_momentum;
             let mut j = 0;
-            let mut n = 1.;
-            let mut n_prime: f64;
+            let mut n = 1;
             let mut s = true;
-            let mut s_prime: bool;
-            let mut alpha = 0.;
-            let mut n_alpha = 0.;
             while s {
                 let v = if self.rng.gen_range(0.0..1.0) < 0.5_f64 {
                     -1
@@ -95,37 +87,31 @@ where
                     1
                 };
                 if v == -1 {
-                    (n_prime, s_prime, alpha, n_alpha) = self.build_next_subtree(
+                    self.tree.build(
                         &mut backward_position,
                         &mut backward_momentum,
-                        u,
                         v,
                         j,
                         step_size,
-                        &init_position,
-                        &init_momentum,
                     );
                 } else {
-                    (n_prime, s_prime, alpha, n_alpha) = self.build_next_subtree(
+                    self.tree.build(
                         &mut forward_position,
                         &mut forward_momentum,
-                        u,
                         v,
                         j,
                         step_size,
-                        &init_position,
-                        &init_momentum,
                     );
                 }
-                if s_prime {
-                    let r = n_prime / n;
+                if self.tree.is_valid() {
+                    let r = self.tree.num_added_within_slice() as f64 / n as f64;
                     let acc_prob = if r > 1. { 1. } else { r };
                     if self.rng.gen_range(0.0..1.0) <= acc_prob {
-                        samples[curr_sample_ix] = self.most_recent_subtree.selected_leaf().clone();
+                        samples[curr_sample_ix] = *self.tree.selected_leaf();
                     }
                 }
-                n += n_prime;
-                s = s_prime
+                n += self.tree.num_added_within_slice();
+                s = self.tree.is_valid()
                     && ((forward_position - backward_position).dotp(&backward_momentum) >= 0.0)
                     && ((forward_position - backward_position).dotp(&forward_momentum) >= 0.0);
                 j += 1;
@@ -135,7 +121,10 @@ where
             // dual averaging
             if curr_sample_ix < n_adapt {
                 av_h = (1. - (1. / (curr_sample_ix as f64 + T0))) * av_h
-                    + (1. / (curr_sample_ix as f64 + T0)) * (AV_ACC_PROB - alpha / n_alpha);
+                    + (1. / (curr_sample_ix as f64 + T0))
+                        * (AV_ACC_PROB
+                            - self.tree.sum_acceptace_probabilities()
+                                / self.tree.num_added_total() as f64);
                 let log_step_size =
                     shrinkage_target - ((curr_sample_ix as f64).sqrt() / GAMMA) * av_h;
                 let ix_pow_neg_kappa = (curr_sample_ix as f64).powf(-KAPPA);
@@ -149,62 +138,28 @@ where
         samples
     }
 
-    fn build_next_subtree(
-        &mut self,
-        position: &mut T,
-        momentum: &mut T,
-        u: f64,
-        v: isize,
-        j: usize,
-        step_size: f64,
-        reference_position: &T,
-        reference_momentum: &T,
-    ) {
-        let n_leaf_pairs = 2_usize.pow((j - 1) as u32);
-        for _ in 0..n_leaf_pairs {
-            let (n_prime, mut is_valid_state, alpha, n_alpha) = self.step(
-                position,
-                momentum,
-                &reference_position,
-                &reference_momentum,
-                step_size,
-                u,
-                v,
-            );
-            if v == 1 {
-                is_valid_state &= ((*position - *opposite_position).dotp(momentum) >= 0.0)
-                    && ((*position - *opposite_position).dotp(opposite_momentum) >= 0.0);
-            } else {
-                is_valid_state &= ((*opposite_position - *position).dotp(momentum) >= 0.0)
-                    && ((*opposite_position - *position).dotp(opposite_momentum) >= 0.0);
-            }
-            if !is_valid_state {
-                break;
-            }
-        }
+    fn random_momentum(&mut self) -> T {
+        self.tree.random_momentum()
     }
 
-    fn step(
+    fn log_target_density_gradient(&self, position: &T) -> T {
+        self.tree.log_target_density_gradient(position)
+    }
+
+    fn acceptance_probability(
         &self,
-        position: &mut T,
-        momentum: &mut T,
-        init_position: &T,
-        init_momentum: &T,
-        step_size: f64,
-        u: f64,
-        v: isize,
-    ) -> (usize, bool, f64, f64) {
-        self.leapfrog(position, momentum, v as f64 * step_size);
-        let log_h_density = self.neg_hamiltonian(position, momentum);
-        let n_prime = (u.ln() <= log_h_density) as usize;
-        let s_prime = u.ln() < (DELTA_MAX + log_h_density);
-        let alpha = self.acceptance_probability(position, momentum, init_position, init_momentum);
-        (n_prime, s_prime, alpha, 1.)
+        position: &T,
+        momentum: &T,
+        initial_position: &T,
+        initial_momentum: &T,
+    ) -> f64 {
+        self.tree
+            .acceptance_probability(position, momentum, initial_position, initial_momentum)
     }
 
     fn find_reasonable_step_size(&mut self, mut position: T) -> f64 {
         let mut step_size = 1.;
-        let mut momentum = self.momentum_density.sample();
+        let mut momentum = self.random_momentum();
         let initial_momentum = momentum;
         let initial_position = position;
         self.leapfrog(&mut position, &mut momentum, step_size);
@@ -225,34 +180,10 @@ where
     }
 
     fn leapfrog(&self, position: &mut T, momentum: &mut T, step_size: f64) {
-        *momentum += self.target_density.log_density_gradient(position) * (step_size / 2.);
+        *momentum += self.log_target_density_gradient(position) * (step_size / 2.);
         *position += *momentum * step_size;
-        *momentum += self.target_density.log_density_gradient(position) * (step_size / 2.);
+        *momentum += self.log_target_density_gradient(position) * (step_size / 2.);
         dbg!(position, momentum);
-    }
-
-    fn is_accepted(&mut self, acceptance_probability: f64) -> bool {
-        self.rng.gen_range(0.0..1.0) < acceptance_probability
-    }
-
-    fn acceptance_probability(
-        &self,
-        new_position: &T,
-        new_momentum: &T,
-        initial_position: &T,
-        initial_momentum: &T,
-    ) -> f64 {
-        let log_acc_probability = self.neg_hamiltonian(new_position, new_momentum)
-            - self.neg_hamiltonian(initial_position, initial_momentum);
-        if log_acc_probability >= 0. {
-            return 1.;
-        }
-        log_acc_probability.exp()
-    }
-
-    // This is -H = (-U) + (-K)
-    fn neg_hamiltonian(&self, position: &T, momentum: &T) -> f64 {
-        self.target_density.log_density(position) + self.momentum_density.log_density(momentum)
     }
 }
 
