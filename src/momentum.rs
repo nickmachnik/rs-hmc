@@ -9,6 +9,7 @@ pub trait Momentum<T> {
     fn sample(&mut self) -> T;
 }
 
+#[derive(Clone)]
 pub struct UnivariateStandardNormalMomentum {
     rng: rand::rngs::ThreadRng,
     log_sqrt_2_pi: f64,
@@ -33,6 +34,7 @@ impl Momentum<f64> for UnivariateStandardNormalMomentum {
     }
 }
 
+#[derive(Clone)]
 pub struct MultivariaStandardNormalMomentum {
     rng: rand::rngs::ThreadRng,
     ndim: usize,
