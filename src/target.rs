@@ -8,6 +8,8 @@ use ndarray::Array1;
 /// ## Examples
 ///
 /// ```
+/// use rs_hmc::target::Target;
+///
 /// struct UnivariateStandardNormal {
 ///     log_sqrt_2_pi: f64,
 /// }
@@ -21,11 +23,11 @@ use ndarray::Array1;
 /// }
 ///
 /// impl Target<f64> for UnivariateStandardNormal {
-///     fn log_density(&self, position: f64) -> f64 {
+///     fn log_density(&self, position: &f64) -> f64 {
 ///         (-0.5 * position * position) - self.log_sqrt_2_pi
 ///     }
 ///
-///     fn log_density_gradient(&self, position: f64) -> f64 {
+///     fn log_density_gradient(&self, position: &f64) -> f64 {
 ///         -position
 ///     }
 /// }
@@ -37,6 +39,7 @@ pub trait Target<T> {
     fn log_density_gradient(&self, position: &T) -> T;
 }
 
+#[derive(Copy, Clone)]
 pub struct UnivariateStandardNormal {
     log_sqrt_2_pi: f64,
 }
@@ -59,6 +62,7 @@ impl Target<f64> for UnivariateStandardNormal {
     }
 }
 
+#[derive(Copy, Clone)]
 pub struct MultivariateStandardNormal {}
 
 impl MultivariateStandardNormal {
