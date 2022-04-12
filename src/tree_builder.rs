@@ -89,7 +89,7 @@ where
         self.momentum_density.sample()
     }
 
-    pub fn acceptance_probability(
+    fn acceptance_probability(
         &self,
         new_position: &T,
         new_momentum: &T,
@@ -104,12 +104,25 @@ where
         log_acc_probability.exp()
     }
 
+    pub fn hamiltonian_density_ratio(
+        &self,
+        new_position: &T,
+        new_momentum: &T,
+        initial_position: &T,
+        initial_momentum: &T,
+    ) -> f64 {
+        (self.neg_hamiltonian(new_position, new_momentum)
+            - self.neg_hamiltonian(initial_position, initial_momentum))
+        .exp()
+    }
+
     // This is -H = (-U) + (-K)
     pub fn neg_hamiltonian(&self, position: &T, momentum: &T) -> f64 {
+        dbg!(position, momentum);
         self.target_density.log_density(position) + self.momentum_density.log_density(momentum)
     }
 
-    pub fn sum_acceptace_probabilities(&self) -> f64 {
+    pub fn sum_acceptance_probabilities(&self) -> f64 {
         self.acceptance_probabilities[0]
     }
 
@@ -148,14 +161,18 @@ where
         doubling_round: usize,
         step_size: f64,
     ) {
+        println!("new build");
+        dbg!(doubling_round, direction);
         self.reset();
         self.set_direction(direction);
-        let n_leaf_pairs = 2_usize.pow((doubling_round - 1) as u32);
-        for _ in 0..n_leaf_pairs {
+        let n_leaves = 2_usize.pow((doubling_round - 1) as u32);
+        for _ in 0..n_leaves {
             self.step(position, momentum, step_size);
-            if !self.is_valid() {
-                break;
-            }
+            dbg!(&self.selected_leaves);
+            // if !self.is_valid() {
+            //     println!("tree invalid!");
+            //     break;
+            // }
         }
     }
 
@@ -181,6 +198,14 @@ where
             &self.reference_momentum,
         );
         if !delta_max_satisfied {
+            println!("delta max not satisfied!");
+            dbg!(
+                self.slice.ln(),
+                DELTA_MAX,
+                log_h_density,
+                acceptance_probability,
+                step_size
+            );
             self.is_valid = false;
         } else {
             self.add(position, momentum, is_within_slice, acceptance_probability);
@@ -211,14 +236,14 @@ where
             self.new_leaf_ix -= 1;
             let ix_inner = self.new_leaf_ix - 1;
             let ix_outer = self.new_leaf_ix;
-            self.is_valid = self.is_u_turn(
+            self.is_valid &= !self.is_u_turn(
                 &self.leftmost_positions[ix_outer],
                 &self.leftmost_momenti[ix_outer],
                 &self.leftmost_positions[ix_inner],
                 &self.leftmost_momenti[ix_inner],
             );
             if !self.is_valid {
-                break;
+                println!("u turn!");
             }
             let p_accept = self.num_within_slice[ix_outer] as f64
                 / (self.num_within_slice[ix_outer] + self.num_within_slice[ix_inner]) as f64;
