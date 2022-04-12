@@ -33,6 +33,7 @@ where
     num_added_total: usize,
     // true if sub tree u turn termination criterion is met within the tree
     contains_u_turn: bool,
+    direction: isize,
     rng: ThreadRng,
 }
 
@@ -58,6 +59,7 @@ where
             new_leaf_ix: 0,
             num_added_total: 0,
             contains_u_turn: false,
+            direction: 1,
             rng: thread_rng(),
         }
     }
@@ -80,8 +82,13 @@ where
         backward_position: &T,
         backward_momentum: &T,
     ) -> bool {
-        (*forward_position - *backward_position).dotp(forward_momentum) < 0.
-            || (*forward_position - *backward_position).dotp(backward_momentum) < 0.
+        if self.direction == 1 {
+            (*forward_position - *backward_position).dotp(forward_momentum) < 0.
+                || (*forward_position - *backward_position).dotp(backward_momentum) < 0.
+        } else {
+            (*backward_position - *forward_position).dotp(forward_momentum) < 0.
+                || (*backward_position - *forward_position).dotp(backward_momentum) < 0.
+        }
     }
 
     fn merge(&mut self) {
@@ -124,5 +131,9 @@ where
 
     pub fn is_valid(&self) -> bool {
         !self.contains_u_turn
+    }
+
+    pub fn set_direction(&mut self, direction: isize) {
+        self.direction = direction;
     }
 }
