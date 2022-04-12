@@ -55,10 +55,10 @@ where
 
     pub fn sample(&mut self, position0: T, n_samples: usize, n_adapt: usize) -> Vec<T> {
         let n_total = n_samples + n_adapt;
-        let mut step_size = self.find_reasonable_step_size(position0);
+        let mut step_size = self.find_reasonable_step_size(&position0);
         let mut log_av_step_size: f64 = 0.;
         let mut av_h = 0.;
-        let shrinkage_target = 10. * step_size;
+        let shrinkage_target = (10. * step_size).ln();
         let mut samples: Vec<T> = Vec::with_capacity(n_total);
         let mut init_position = position0;
         let mut init_momentum: T;
@@ -67,6 +67,7 @@ where
         let mut forward_momentum: T;
         let mut backward_momentum: T;
         let mut curr_sample_ix = 0;
+        dbg!(step_size);
         while samples.len() < n_total {
             samples.push(init_position);
             init_momentum = self.random_momentum();
@@ -77,7 +78,7 @@ where
             backward_position = init_position;
             forward_momentum = init_momentum;
             backward_momentum = init_momentum;
-            let mut j = 0;
+            let mut j = 1;
             let mut n = 1;
             let mut s = true;
             while s {
@@ -111,31 +112,45 @@ where
                     }
                 }
                 n += self.tree.num_added_within_slice();
+                dbg!(self.tree.is_valid());
                 s = self.tree.is_valid()
                     && ((forward_position - backward_position).dotp(&backward_momentum) >= 0.0)
                     && ((forward_position - backward_position).dotp(&forward_momentum) >= 0.0);
+                dbg!(
+                    forward_position,
+                    backward_position,
+                    forward_momentum,
+                    backward_momentum
+                );
+                dbg!(s);
                 j += 1;
             }
-            curr_sample_ix += 1;
             init_position = samples[curr_sample_ix];
+            curr_sample_ix += 1;
             // dual averaging
             if curr_sample_ix < n_adapt {
-                av_h = (1. - (1. / (curr_sample_ix as f64 + T0))) * av_h
-                    + (1. / (curr_sample_ix as f64 + T0))
+                dbg!(
+                    self.tree.sum_acceptance_probabilities(),
+                    self.tree.num_added_total()
+                );
+                let eta = 1. / (curr_sample_ix as f64 + T0);
+                av_h = (1. - eta) * av_h
+                    + eta
                         * (AV_ACC_PROB
-                            - self.tree.sum_acceptace_probabilities()
+                            - self.tree.sum_acceptance_probabilities()
                                 / self.tree.num_added_total() as f64);
                 let log_step_size =
                     shrinkage_target - ((curr_sample_ix as f64).sqrt() / GAMMA) * av_h;
                 let ix_pow_neg_kappa = (curr_sample_ix as f64).powf(-KAPPA);
                 log_av_step_size =
                     ix_pow_neg_kappa * log_step_size + (1. - ix_pow_neg_kappa) * log_av_step_size;
-                step_size = log_av_step_size.exp();
+                step_size = log_step_size.exp();
+                dbg!(av_h, step_size, log_step_size, log_av_step_size);
             } else {
                 step_size = log_av_step_size.exp();
             }
         }
-        samples
+        samples[n_adapt..].to_vec()
     }
 
     fn random_momentum(&mut self) -> T {
@@ -146,44 +161,41 @@ where
         self.tree.log_target_density_gradient(position)
     }
 
-    fn acceptance_probability(
-        &self,
-        position: &T,
-        momentum: &T,
-        initial_position: &T,
-        initial_momentum: &T,
-    ) -> f64 {
-        self.tree
-            .acceptance_probability(position, momentum, initial_position, initial_momentum)
-    }
-
-    fn find_reasonable_step_size(&mut self, mut position: T) -> f64 {
+    fn find_reasonable_step_size(&mut self, initial_position: &T) -> f64 {
         let mut step_size = 1.;
-        let mut momentum = self.random_momentum();
-        let initial_momentum = momentum;
-        let initial_position = position;
-        self.leapfrog(&mut position, &mut momentum, step_size);
-        let mut acceptance_prob =
-            self.acceptance_probability(&position, &momentum, &initial_position, &initial_momentum);
-        let a: u32 = if acceptance_prob > 0.5 { 1 } else { 0 };
-        while acceptance_prob.powf(a as f64) > (1. / 2usize.pow(a) as f64) {
-            step_size *= 2usize.pow(a) as f64;
-            self.leapfrog(&mut position, &mut momentum, step_size);
-            acceptance_prob = self.acceptance_probability(
-                &position,
-                &momentum,
+        let initial_momentum = self.random_momentum();
+        let (mut new_position, mut new_momentum) =
+            self.leapfrog(&initial_position, &initial_momentum, step_size);
+        let mut r = self.tree.hamiltonian_density_ratio(
+            &new_position,
+            &new_momentum,
+            &initial_position,
+            &initial_momentum,
+        );
+        dbg!(r);
+        let a: f64 = if r > 0.5 { 1. } else { -1. };
+        while r.powf(a) > 2_f64.powf(-a) {
+            step_size *= 2_f64.powf(a);
+            (new_position, new_momentum) =
+                self.leapfrog(&initial_position, &initial_momentum, step_size);
+            r = self.tree.hamiltonian_density_ratio(
+                &new_position,
+                &new_momentum,
                 &initial_position,
                 &initial_momentum,
             );
+            dbg!(r);
         }
         step_size
     }
 
-    fn leapfrog(&self, position: &mut T, momentum: &mut T, step_size: f64) {
-        *momentum += self.log_target_density_gradient(position) * (step_size / 2.);
-        *position += *momentum * step_size;
-        *momentum += self.log_target_density_gradient(position) * (step_size / 2.);
-        dbg!(position, momentum);
+    fn leapfrog(&self, position: &T, momentum: &T, step_size: f64) -> (T, T) {
+        let mut new_momentum = *momentum;
+        let mut new_position = *position;
+        new_momentum += self.log_target_density_gradient(position) * (step_size / 2.);
+        new_position += *momentum * step_size;
+        new_momentum += self.log_target_density_gradient(position) * (step_size / 2.);
+        (new_position, new_momentum)
     }
 }
 
