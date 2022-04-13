@@ -37,6 +37,7 @@ pub trait Target<T> {
     fn log_density(&self, position: &T) -> f64;
     /// Compute the gradient logarithm of the target density function at a given position
     fn log_density_gradient(&self, position: &T) -> T;
+    fn dim(&self) -> usize;
 }
 
 #[derive(Copy, Clone)]
@@ -60,14 +61,20 @@ impl Target<f64> for UnivariateStandardNormal {
     fn log_density_gradient(&self, position: &f64) -> f64 {
         -position
     }
+
+    fn dim(&self) -> usize {
+        1
+    }
 }
 
 #[derive(Copy, Clone)]
-pub struct MultivariateStandardNormal {}
+pub struct MultivariateStandardNormal {
+    dim: usize,
+}
 
 impl MultivariateStandardNormal {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(dim: usize) -> Self {
+        Self { dim }
     }
 }
 
@@ -78,6 +85,10 @@ impl Target<Array1<f64>> for MultivariateStandardNormal {
 
     fn log_density_gradient(&self, position: &Array1<f64>) -> Array1<f64> {
         -position
+    }
+
+    fn dim(&self) -> usize {
+        self.dim
     }
 }
 
