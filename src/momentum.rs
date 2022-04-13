@@ -31,12 +31,12 @@ impl Momentum<f64> for UnivariateStandardNormalMomentum {
 }
 
 #[derive(Clone)]
-pub struct MultivariaStandardNormalMomentum {
+pub struct MultivariateStandardNormalMomentum {
     rng: rand::rngs::ThreadRng,
     ndim: usize,
 }
 
-impl MultivariaStandardNormalMomentum {
+impl MultivariateStandardNormalMomentum {
     pub fn new(ndim: usize) -> Self {
         Self {
             rng: thread_rng(),
@@ -45,7 +45,7 @@ impl MultivariaStandardNormalMomentum {
     }
 }
 
-impl Momentum<Array1<f64>> for MultivariaStandardNormalMomentum {
+impl Momentum<Array1<f64>> for MultivariateStandardNormalMomentum {
     fn sample(&mut self) -> Array1<f64> {
         let mut res = Array1::from(vec![0.; self.ndim]);
         for ix in 0..self.ndim {
