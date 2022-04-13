@@ -92,6 +92,46 @@ impl Target<Array1<f64>> for MultivariateStandardNormal {
     }
 }
 
+#[derive(Clone)]
+pub struct MultivariateBimodal {
+    dim: usize,
+    mu1: Array1<f64>,
+    mu2: Array1<f64>,
+}
+
+impl MultivariateBimodal {
+    pub fn new(dim: usize, mu1: Array1<f64>, mu2: Array1<f64>) -> Self {
+        Self { dim, mu1, mu2 }
+    }
+}
+
+impl Target<Array1<f64>> for MultivariateBimodal {
+    fn log_density(&self, position: &Array1<f64>) -> f64 {
+        let diff_a = position - &self.mu1;
+        let diff_b = position - &self.mu2;
+        ((-0.5 * diff_a.dot(&diff_a)).exp() + (-0.5 * diff_b.dot(&diff_b)).exp())
+            .ln()
+            .max(-100.)
+    }
+
+    fn log_density_gradient(&self, position: &Array1<f64>) -> Array1<f64> {
+        let delta = 0.00001;
+        let curr_d = self.log_density(position);
+        let mut grad = Array1::zeros(self.dim());
+        let mut position1 = position.clone();
+        for ix in 0..self.dim() {
+            position1[ix] = position[ix] + delta;
+            grad[ix] = (self.log_density(&position1) - curr_d) / delta;
+            position1[ix] = position[ix];
+        }
+        grad
+    }
+
+    fn dim(&self) -> usize {
+        self.dim
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -108,7 +148,7 @@ mod tests {
 
     #[test]
     fn test_mv_standard_normal() {
-        let d = MultivariateStandardNormal::new();
+        let d = MultivariateStandardNormal::new(2);
         assert_abs_diff_eq!(d.log_density_gradient(&arr1(&[0., 0.])), arr1(&[0., 0.]));
         assert!(d.log_density(&arr1(&[0., 0.])) > d.log_density(&arr1(&[1., 0.])));
         assert!(d.log_density(&arr1(&[0., 0.])) > d.log_density(&arr1(&[-1., 0.])));
