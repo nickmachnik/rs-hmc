@@ -7,9 +7,9 @@ fn main() {
     let mut nuts = NUTS::new(
         UnivariateStandardNormal::new(),
         UnivariateStandardNormalMomentum::new(),
-        100,
+        8,
     );
-    nuts.sample(2., 200, 10)
+    nuts.sample(2., 10000, 1000)
         .iter()
         .for_each(|v| println!("{v}"));
 }

@@ -67,7 +67,6 @@ where
         let mut forward_momentum: T;
         let mut backward_momentum: T;
         let mut curr_sample_ix = 0;
-        dbg!(step_size);
         while samples.len() < n_total {
             samples.push(init_position);
             init_momentum = self.random_momentum();
@@ -112,27 +111,15 @@ where
                     }
                 }
                 n += self.tree.num_added_within_slice();
-                dbg!(self.tree.is_valid());
                 s = self.tree.is_valid()
                     && ((forward_position - backward_position).dotp(&backward_momentum) >= 0.0)
                     && ((forward_position - backward_position).dotp(&forward_momentum) >= 0.0);
-                dbg!(
-                    forward_position,
-                    backward_position,
-                    forward_momentum,
-                    backward_momentum
-                );
-                dbg!(s);
                 j += 1;
             }
             init_position = samples[curr_sample_ix];
             curr_sample_ix += 1;
             // dual averaging
             if curr_sample_ix < n_adapt {
-                dbg!(
-                    self.tree.sum_acceptance_probabilities(),
-                    self.tree.num_added_total()
-                );
                 let eta = 1. / (curr_sample_ix as f64 + T0);
                 av_h = (1. - eta) * av_h
                     + eta
@@ -145,7 +132,6 @@ where
                 log_av_step_size =
                     ix_pow_neg_kappa * log_step_size + (1. - ix_pow_neg_kappa) * log_av_step_size;
                 step_size = log_step_size.exp();
-                dbg!(av_h, step_size, log_step_size, log_av_step_size);
             } else {
                 step_size = log_av_step_size.exp();
             }
@@ -165,26 +151,24 @@ where
         let mut step_size = 1.;
         let initial_momentum = self.random_momentum();
         let (mut new_position, mut new_momentum) =
-            self.leapfrog(&initial_position, &initial_momentum, step_size);
+            self.leapfrog(initial_position, &initial_momentum, step_size);
         let mut r = self.tree.hamiltonian_density_ratio(
             &new_position,
             &new_momentum,
-            &initial_position,
+            initial_position,
             &initial_momentum,
         );
-        dbg!(r);
         let a: f64 = if r > 0.5 { 1. } else { -1. };
         while r.powf(a) > 2_f64.powf(-a) {
             step_size *= 2_f64.powf(a);
             (new_position, new_momentum) =
-                self.leapfrog(&initial_position, &initial_momentum, step_size);
+                self.leapfrog(initial_position, &initial_momentum, step_size);
             r = self.tree.hamiltonian_density_ratio(
                 &new_position,
                 &new_momentum,
-                &initial_position,
+                initial_position,
                 &initial_momentum,
             );
-            dbg!(r);
         }
         step_size
     }
