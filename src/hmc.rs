@@ -7,25 +7,25 @@ use std::ops::{AddAssign, Mul};
 
 use std::marker::PhantomData;
 
-pub struct HMC<D, M, T>
+pub struct HMC<'a, D, M, T>
 where
     D: Target<T>,
     M: Momentum<T>,
     T: Clone + Copy + Mul<f64, Output = T> + AddAssign + Debug,
 {
-    target_density: D,
+    target_density: &'a D,
     momentum_density: M,
     data_type: PhantomData<T>,
     rng: ThreadRng,
 }
 
-impl<D, M, T> HMC<D, M, T>
+impl<'a, D, M, T> HMC<'a, D, M, T>
 where
     D: Target<T>,
     M: Momentum<T>,
     T: Clone + Copy + Mul<f64, Output = T> + AddAssign + Debug,
 {
-    pub fn new(target_density: D, momentum_density: M) -> Self {
+    pub fn new(target_density: &'a D, momentum_density: M) -> Self {
         Self {
             target_density,
             momentum_density,
@@ -100,10 +100,8 @@ mod tests {
 
     #[test]
     fn test_hmc_univariate_normal() {
-        let mut hmc = HMC::new(
-            UnivariateStandardNormal::new(),
-            UnivariateStandardNormalMomentum::new(),
-        );
+        let target = UnivariateStandardNormal::new();
+        let mut hmc = HMC::new(&target, UnivariateStandardNormalMomentum::new());
         let n_samples = 10000;
         let samples = hmc.sample(1.2, 0.1, 100, n_samples);
         let mean = samples.iter().sum::<f64>() / samples.len() as f64;

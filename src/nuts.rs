@@ -13,21 +13,21 @@ const AV_ACC_PROB: f64 = 0.64;
 
 pub type A = Array1<f64>;
 
-pub struct NUTS<D, M>
+pub struct NUTS<'a, D, M>
 where
     D: Target<A>,
     M: Momentum<A>,
 {
-    tree: Tree<D, M>,
+    tree: Tree<'a, D, M>,
     rng: ThreadRng,
 }
 
-impl<D, M> NUTS<D, M>
+impl<'a, D, M> NUTS<'a, D, M>
 where
     D: Target<A>,
     M: Momentum<A>,
 {
-    pub fn new(target_density: D, momentum_density: M, max_subtree_height: usize) -> Self {
+    pub fn new(target_density: &'a D, momentum_density: M, max_subtree_height: usize) -> Self {
         Self {
             tree: Tree::new(target_density, momentum_density, max_subtree_height),
             rng: thread_rng(),

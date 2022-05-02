@@ -6,12 +6,12 @@ use crate::target::Target;
 use rand::rngs::ThreadRng;
 use rand::{thread_rng, Rng};
 
-pub struct Tree<D, M>
+pub struct Tree<'a, D, M>
 where
     D: Target<A>,
     M: Momentum<A>,
 {
-    target_density: D,
+    target_density: &'a D,
     momentum_density: M,
     // selected leaf for each subtree
     selected_leaves: Vec<A>,
@@ -37,12 +37,12 @@ where
     rng: ThreadRng,
 }
 
-impl<D, M> Tree<D, M>
+impl<'a, D, M> Tree<'a, D, M>
 where
     D: Target<A>,
     M: Momentum<A>,
 {
-    pub fn new(target_density: D, momentum_density: M, height: usize) -> Self {
+    pub fn new(target_density: &'a D, momentum_density: M, height: usize) -> Self {
         let dim = target_density.dim();
         Self {
             target_density,
