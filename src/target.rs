@@ -30,6 +30,10 @@ use ndarray::Array1;
 ///     fn log_density_gradient(&self, position: &f64) -> f64 {
 ///         -position
 ///     }
+///
+///     fn dim(&self) -> usize {
+///         1
+///     }
 /// }
 /// ```
 pub trait Target<T> {

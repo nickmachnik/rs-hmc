@@ -3,9 +3,9 @@ use rand::prelude::*;
 use rand_distr::StandardNormal;
 
 /// Sampling of momenta and computation of log densities.
-pub trait Momentum<T> {
+pub trait Momentum<T, F> {
     /// Compute the logarithm of the momentum density function
-    fn log_density(&self, position: &T) -> f64;
+    fn log_density(&self, position: &T) -> F;
     fn sample(&mut self) -> T;
 }
 
@@ -20,7 +20,7 @@ impl UnivariateStandardNormalMomentum {
     }
 }
 
-impl Momentum<f64> for UnivariateStandardNormalMomentum {
+impl Momentum<f64, f64> for UnivariateStandardNormalMomentum {
     fn sample(&mut self) -> f64 {
         self.rng.sample(StandardNormal)
     }
@@ -45,7 +45,7 @@ impl MultivariateStandardNormalMomentum {
     }
 }
 
-impl Momentum<Array1<f64>> for MultivariateStandardNormalMomentum {
+impl Momentum<Array1<f64>, f64> for MultivariateStandardNormalMomentum {
     fn sample(&mut self) -> Array1<f64> {
         let mut res = Array1::from(vec![0.; self.ndim]);
         for ix in 0..self.ndim {
@@ -55,6 +55,20 @@ impl Momentum<Array1<f64>> for MultivariateStandardNormalMomentum {
     }
 
     fn log_density(&self, position: &Array1<f64>) -> f64 {
+        -0.5 * position.dot(position)
+    }
+}
+
+impl Momentum<Array1<f32>, f32> for MultivariateStandardNormalMomentum {
+    fn sample(&mut self) -> Array1<f32> {
+        let mut res = Array1::from(vec![0.; self.ndim]);
+        for ix in 0..self.ndim {
+            res[ix] = self.rng.sample(StandardNormal);
+        }
+        res
+    }
+
+    fn log_density(&self, position: &Array1<f32>) -> f32 {
         -0.5 * position.dot(position)
     }
 }
